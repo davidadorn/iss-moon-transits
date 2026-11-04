@@ -1,0 +1,240 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ISS Moon Transits</title>
+<meta name="description" content="Find when the International Space Station crosses in front of the Moon near you, where to stand, and where to look.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Ccircle cx='32' cy='32' r='26' fill='%23e9e3d0'/%3E%3Crect x='18' y='30' width='28' height='4' fill='%23111'/%3E%3Crect x='30' y='22' width='4' height='20' fill='%23111'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="vendor/satellite.min.js"></script>
+<script src="vendor/astronomy.browser.min.js"></script>
+<script src="core.js"></script>
+<script src="common.js"></script>
+<style>
+  :root{--bg:#070a12;--panel:#111724;--line:#263049;--txt:#e8ecf4;--dim:#93a0b8;--acc:#ffd36b;--btn:#2f4b8a}
+  *{box-sizing:border-box}
+  body{margin:0;background:radial-gradient(1200px 600px at 70% -10%,#16234a 0%,var(--bg) 60%);background-color:var(--bg);
+       color:var(--txt);font:15px/1.45 system-ui,Segoe UI,sans-serif;min-height:100vh}
+  main{max-width:1100px;margin:0 auto;padding:28px 16px 48px}
+  h1{font-size:26px;margin:0 0 4px;letter-spacing:.2px}
+  .sub{color:var(--dim);margin:0 0 22px;max-width:760px}
+  form{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:16px;display:grid;gap:12px}
+  .addr{display:flex;gap:8px;flex-wrap:wrap}
+  .addr input{flex:1;min-width:220px;padding:11px 12px;font:inherit;color:var(--txt);background:#0a0f1b;border:1px solid var(--line);border-radius:7px}
+  button{font:inherit;color:#fff;background:var(--btn);border:1px solid #4766ad;border-radius:7px;padding:10px 16px;cursor:pointer}
+  button:hover{background:#3a5aa3} button:disabled{opacity:.5;cursor:default}
+  button.ghost{background:transparent;border-color:var(--line);color:var(--dim);padding:10px 12px}
+  .opts{display:flex;flex-wrap:wrap;gap:8px 18px;color:var(--dim)}
+  .opts label{display:flex;align-items:center;gap:6px}
+  .opts select{font:inherit;background:#0a0f1b;color:var(--txt);border:1px solid var(--line);border-radius:5px;padding:3px}
+  #status{margin:18px 0 0;display:none}
+  .bar{height:8px;background:#1a2235;border-radius:4px;overflow:hidden;margin-top:8px}
+  .bar div{height:100%;width:0;background:linear-gradient(90deg,#4d7cff,#9fd0ff);transition:width .2s}
+  #err{color:#ff8f8f;margin-top:14px}
+  #results{display:none;margin-top:24px}
+  .home{color:var(--dim);margin-bottom:12px}
+  .home b{color:var(--txt)}
+  table{width:100%;border-collapse:collapse;background:var(--panel);border:1px solid var(--line);border-radius:10px;overflow:hidden}
+  th,td{padding:9px 10px;text-align:left;border-bottom:1px solid var(--line);vertical-align:top}
+  th{font-size:12px;text-transform:uppercase;letter-spacing:.5px;color:var(--dim);font-weight:600;background:#0d1320}
+  td small{color:var(--dim);display:block}
+  tr:last-child td{border-bottom:0}
+  .sw{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:6px;vertical-align:middle}
+  .num{font-variant-numeric:tabular-nums}
+  a{color:#8ec5ff}
+  .sim{display:inline-block;color:#fff;background:var(--btn);border:1px solid #4766ad;border-radius:7px;padding:8px 14px;text-decoration:none;white-space:nowrap}
+  .sim:hover{background:#3a5aa3}
+  #map{height:440px;margin-top:18px;border-radius:10px;border:1px solid var(--line)}
+  .lbl{background:rgba(15,18,26,.88);color:#fff;border:0;font-size:12px;padding:3px 6px}
+  .note{color:var(--dim);font-size:13px;margin-top:14px}
+  .tablewrap{overflow-x:auto}
+  footer{color:#6c7891;font-size:12px;margin-top:36px;border-top:1px solid var(--line);padding-top:12px}
+  footer a{color:#8aa0c8}
+  @media (max-width:760px){
+    #map{height:340px}
+    thead{display:none}
+    table,tbody,td{display:block;width:100%}
+    tr{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px 12px;padding:12px;border-bottom:1px solid var(--line)}
+    tr:last-child{border-bottom:0}
+    td{border:0;padding:0}
+    td:nth-child(1),td:nth-child(2){grid-column:1/-1}
+    td:last-child{grid-column:1/-1} .sim{display:block;text-align:center}
+    td[data-l]::before{content:attr(data-l);display:block;font-size:11px;color:var(--dim);text-transform:uppercase;letter-spacing:.4px}
+  }
+</style></head><body><main>
+<h1>ISS Moon transits near you</h1>
+<p class="sub">Enter an address to find the next times the International Space Station crosses in front of the Moon
+close to it, where to stand, and when and where to look. Then watch each one in a sky simulator.</p>
+<form id="f">
+  <div class="addr">
+    <input id="address" placeholder="Street address, city, or lat, lon" autocomplete="street-address" required>
+    <button id="go">Find transits</button>
+    <button type="button" class="ghost" id="gps" title="Use my current location">&#8982; My location</button>
+  </div>
+  <div class="opts">
+    <label><input type="checkbox" id="night" checked> Night only</label>
+    <label>Moon at least <select id="illum"><option value="0">any</option><option value="25">25%</option>
+      <option value="50" selected>50%</option><option value="75">75%</option></select> lit</label>
+    <label>Show <select id="count"><option>3</option><option selected>5</option><option>8</option></select> closest</label>
+    <label>in the next <select id="days"><option value="14">14</option><option value="30">30</option>
+      <option value="60" selected>60</option></select> days</label>
+  </div>
+</form>
+<div id="status"><span id="stage">Starting</span><div class="bar"><div id="prog"></div></div></div>
+<div id="err"></div>
+<section id="results">
+  <div class="home" id="home"></div>
+  <div class="tablewrap"><table>
+    <thead><tr><th>When</th><th>Where to stand</th><th>Look</th><th>Crossing</th><th>Strip</th><th>Moon</th><th>Elev.</th><th></th></tr></thead>
+    <tbody id="rows"></tbody>
+  </table></div>
+  <div id="map"></div>
+  <p class="note">The colored band is the strip where the transit is visible; stand anywhere inside it, ideally on the dashed
+  centerline. The arrow points where to look. Predictions drift as the ISS orbit changes (about 1 km and 0.1 s per day,
+  more after a reboost), so search again a week before and on the day of the event.</p>
+</section>
+<footer>
+  Everything is computed in your browser. ISS orbit from <a href="https://celestrak.org" target="_blank">CelesTrak</a>;
+  address search &copy; <a href="https://www.openstreetmap.org/copyright" target="_blank">OpenStreetMap</a> contributors (Nominatim);
+  elevation and time zone from <a href="https://open-meteo.com" target="_blank">Open-Meteo</a>;
+  orbit math by <a href="https://github.com/shashwatak/satellite-js" target="_blank">satellite.js</a> and
+  <a href="https://github.com/cosinekitty/astronomy" target="_blank">Astronomy Engine</a>;
+  stars from <a href="https://github.com/ofrohn/d3-celestial" target="_blank">d3-celestial</a>.
+</footer>
+<script>
+const COLORS = ['#ff5a5f','#ffb400','#3ddc97','#4ea8ff','#c77dff','#ff7ab6','#7ee0ff','#d4e157'];
+const $ = id => document.getElementById(id);
+const esc = s => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+let map, worker;
+
+async function getJSON(url) { const r = await fetch(url); if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); }
+
+async function geocode(q) {
+  const m = q.match(/^\s*(-?\d+(?:\.\d+)?)\s*[, ]\s*(-?\d+(?:\.\d+)?)\s*$/);
+  if (m) return {lat: +m[1], lon: +m[2], name: `${(+m[1]).toFixed(5)}, ${(+m[2]).toFixed(5)}`};
+  const res = await getJSON('https://nominatim.openstreetmap.org/search?' +
+    new URLSearchParams({format: 'jsonv2', limit: 1, q, 'accept-language': 'en'}));
+  if (!res.length) throw new Error(`Couldn't find "${q}". Try adding the city and state or country.`);
+  return {lat: +res[0].lat, lon: +res[0].lon, name: res[0].display_name};
+}
+async function siteInfo(lat, lon) {
+  const d = await getJSON('https://api.open-meteo.com/v1/forecast?' +
+    new URLSearchParams({latitude: lat, longitude: lon, timezone: 'auto', current: 'temperature_2m'}));
+  return {elevM: +d.elevation || 0, tz: d.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone};
+}
+
+function stage(text, p) { $('stage').textContent = text + (p ? ` … ${Math.round(p * 100)}%` : '');
+  $('prog').style.width = `${Math.round((p || 0) * 100)}%`; }
+
+function runWorker(msg) {
+  return new Promise((resolve, reject) => {
+    if (worker) worker.terminate();
+    worker = new Worker('worker.js');
+    worker.onmessage = ({data}) => {
+      if (data.type === 'progress') stage(data.stage, data.p);
+      else if (data.type === 'done') resolve(data.events);
+      else reject(new Error(data.message));
+    };
+    worker.onerror = e => reject(new Error(e.message || 'Search failed'));
+    worker.postMessage(msg);
+  });
+}
+
+async function search() {
+  const address = $('address').value.trim(); if (!address) return;
+  const opts = {night: $('night').checked, minIllum: +$('illum').value, count: +$('count').value, days: +$('days').value};
+  const qs = new URLSearchParams({q: address, night: opts.night ? 1 : 0, illum: opts.minIllum, count: opts.count, days: opts.days});
+  history.replaceState(null, '', '?' + qs);
+  $('go').disabled = true; $('err').textContent = ''; $('results').style.display = 'none';
+  $('status').style.display = 'block';
+  try {
+    stage('Looking up the address');
+    const g = await geocode(address);
+    const [si, tle] = await Promise.all([siteInfo(g.lat, g.lon), (stage('Downloading the latest ISS orbit'), getTLE())]);
+    const events = await runWorker({...opts, l1: tle.l1, l2: tle.l2, lat: g.lat, lon: g.lon, elevKm: si.elevM / 1000});
+    show({home: {...g, ...si}, events, tle, qs: qs.toString()});
+  } catch (ex) { $('err').textContent = ex.message || String(ex); }
+  finally { $('go').disabled = false; $('status').style.display = 'none'; }
+}
+
+function simLink(job, i) {
+  const p = new URLSearchParams({h: `${job.home.lat.toFixed(5)},${job.home.lon.toFixed(5)}`, tz: job.home.tz, i,
+    e: job.events.map(e => [(e.ms / 1000).toFixed(3), e.lat.toFixed(5), e.lon.toFixed(5), Math.round(e.elevKm * 1000),
+                            e.halfWidth.toFixed(2)].join(',')).join(';'), back: job.qs});
+  return 'sim.html?' + p;
+}
+
+function show(job) {
+  const h = job.home, age = tleAgeDays(job.tle.l1, job.tle.l2);
+  $('home').innerHTML = `Results for <b>${esc(h.name)}</b> &middot; ${h.lat.toFixed(5)}, ${h.lon.toFixed(5)} &middot; ` +
+    `${Math.round(h.elevM)} m &middot; times in ${esc(h.tz)} &middot; ISS orbit data ${age.toFixed(1)} days old`;
+  job.rows = job.events.map(e => {
+    const F = TC.fmt(e.ms, h.tz);
+    return {...e, date: F.dateShort, time: F.clock.replace(/^0/, '').replace(/(\.\d)\d/, '$1'), tzs: F.tz,
+            dir: TC.compass(e.bearing), look: TC.compass(e.az), phase: TC.phaseName(e.phaseDeg, e.illum)};
+  });
+  if (!job.rows.length) $('rows').innerHTML = '<tr><td colspan="8">No transits found. Try fewer filters or more days.</td></tr>';
+  else $('rows').innerHTML = job.rows.map((r, i) => `<tr>
+    <td><span class="sw" style="background:${COLORS[i % COLORS.length]}"></span><b>${r.date}</b>
+        <small class="num">${r.time} ${esc(r.tzs)}</small></td>
+    <td class="num" data-l="Where to stand"><a href="https://www.google.com/maps?q=${r.lat.toFixed(5)},${r.lon.toFixed(5)}" target="_blank" rel="noopener">${r.lat.toFixed(4)}, ${r.lon.toFixed(4)}</a>
+        <small>${r.dist.toFixed(1)} km ${r.dir} of you</small></td>
+    <td class="num" data-l="Look">${r.look} ${r.az.toFixed(0)}&deg;<small>${r.alt.toFixed(0)}&deg; up</small></td>
+    <td class="num" data-l="Crossing">${r.dur.toFixed(2)} s</td>
+    <td class="num" data-l="Strip">${(2 * r.halfWidth).toFixed(1)} km</td>
+    <td data-l="Moon">${Math.round(r.illum * 100)}%<small>${r.phase}</small></td>
+    <td class="num" data-l="Elevation">${Math.round(r.elevKm * 1000)} m</td>
+    <td><a class="sim" href="${simLink(job, i)}">Simulate</a></td></tr>`).join('');
+  $('results').style.display = 'block';
+  drawMap(job);
+}
+
+function dest(p, brg, km) { const R = 6371, b = brg * Math.PI / 180;
+  return [p[0] + km * Math.cos(b) / R * 180 / Math.PI,
+          p[1] + km * Math.sin(b) / (R * Math.cos(p[0] * Math.PI / 180)) * 180 / Math.PI]; }
+
+function drawMap(job) {
+  if (typeof L === 'undefined') { $('map').textContent = 'Map unavailable.'; return; }
+  if (map) map.remove();
+  map = L.map('map');
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+    {maxZoom: 18, attribution: '&copy; OpenStreetMap contributors'}).addTo(map);
+  const home = [job.home.lat, job.home.lon], bounds = L.latLngBounds([home]);
+  L.circleMarker(home, {radius: 7, color: '#fff', fillColor: '#000', fillOpacity: 1, weight: 3})
+    .addTo(map).bindTooltip('You', {permanent: true, direction: 'right', className: 'lbl'});
+  job.rows.forEach((r, i) => {
+    const c = COLORS[i % COLORS.length], normal = r.trackDir + 90;
+    if (r.track.length > 1) {
+      const left = r.track.map(p => dest(p, normal, r.halfWidth));
+      const right = r.track.map(p => dest(p, normal + 180, r.halfWidth));
+      L.polygon(left.concat(right.reverse()), {color: c, weight: 0, fillOpacity: .25}).addTo(map);
+      L.polyline(r.track, {color: c, weight: 2, dashArray: '6 4'}).addTo(map);
+    }
+    const p = [r.lat, r.lon], tip = dest(p, r.az, Math.max(6, r.dist * .08));
+    L.polyline([p, tip], {color: c, weight: 4}).addTo(map);
+    L.circleMarker(p, {radius: 7, color: '#fff', weight: 2, fillColor: c, fillOpacity: 1}).addTo(map)
+      .bindTooltip(`${r.date.slice(4, 10)} ${r.time}<br>look ${r.look} / ${r.alt.toFixed(0)}&deg;`,
+                   {permanent: true, direction: i % 2 ? 'right' : 'left', className: 'lbl'})
+      .bindPopup(`<b>${r.date}</b><br>${r.time} ${esc(r.tzs)}<br>Look ${r.look} ${r.az.toFixed(0)}&deg;, ${r.alt.toFixed(0)}&deg; up<br>` +
+                 `<a href="${simLink(job, i)}">Simulate</a>`);
+    bounds.extend(p);
+  });
+  map.fitBounds(bounds.pad(.2));
+}
+
+$('f').onsubmit = e => { e.preventDefault(); search(); };
+$('gps').onclick = () => {
+  if (!navigator.geolocation) { $('err').textContent = 'Location is not available in this browser.'; return; }
+  navigator.geolocation.getCurrentPosition(
+    p => { $('address').value = `${p.coords.latitude.toFixed(5)}, ${p.coords.longitude.toFixed(5)}`; search(); },
+    () => { $('err').textContent = 'Could not get your location. Type an address instead.'; },
+    {enableHighAccuracy: true, timeout: 15000});
+};
+// a shared link (?q=...) runs its search straight away
+{ const u = new URLSearchParams(location.search);
+  if (u.get('night') !== null) $('night').checked = u.get('night') === '1';
+  for (const [k, id] of [['illum', 'illum'], ['count', 'count'], ['days', 'days']]) if (u.get(k)) $(id).value = u.get(k);
+  if (u.get('q')) { $('address').value = u.get('q'); search(); }
+  else { const a = lsGet('iss-last-addr'); if (a) $('address').value = a; } }
+$('address').addEventListener('change', () => lsSet('iss-last-addr', $('address').value));
+</script></main></body></html>
